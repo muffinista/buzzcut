@@ -2,6 +2,10 @@
 
 @data = File.read("output.txt")
 
+@data = @data.
+  gsub(/p\.m\./i, "PM").
+  gsub(/@buzzfeed.com/, " @ buzzfeed dot com")
+
 @joined_output = ""
 
 
