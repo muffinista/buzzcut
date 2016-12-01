@@ -6,7 +6,12 @@ require "bundler/setup"
 require 'open-uri'
 require 'nokogiri'
 require 'addressable'
+require 'json'
 
+
+TARGET_WORD_COUNT = 120000
+SLEEP_RATE = 1.0
+OUTPUT_COUNT = 50000
 
 def read_url(url, force=false)
   cachename = Digest::SHA256.hexdigest(url)
@@ -36,13 +41,23 @@ end
 
 REMOVABLE_ELEMENTS = [
   "//script",
+  "//style",
+  "//*[@style='display:none;']",
   "//*[@id='toc']",
+  "//*[@id='respond']",
+  "//*[@id='social-actions']",
+  "//*[@id='nav-signin']",
   "//*[@class='mw-editsection']",
+  "//*[@class='user-bylines']",
+  "//*[@class='user-bio']",
+  "//*[@class='buzz_superlist_item']",
+  "//*[@class='views-tags']",
   "//ol",
   "//*[@id='mw-navigation']",
   "//*[@id='catlinks']",
   "//*[@id='footer']",
-  "//div[@class='navbox']"
+  "//div[@class='navbox']",
+  "//*[@class='effect-fade-in-scale']"
 ]
 
 def guts_of_page(html)
@@ -57,11 +72,9 @@ def guts_of_page(html)
       el = e
     end
   }
+  
   el
 end
-
-TARGET_WORD_COUNT = 2000
-SLEEP_RATE = 1.0
 
 def wordcount
   @data.join("\n").split.size
@@ -127,10 +140,12 @@ while wordcount < TARGET_WORD_COUNT && ! @urls.empty?
 
   text = el.xpath("//text()").to_s
   links = el.css('a').map { |l|
-    u = Addressable::URI.join( url, l['href'].to_s ).to_s.gsub(/#.+/, "")
+    u = Addressable::URI.join( url, l['href'].to_s ).to_s.gsub(/#.+/, "") rescue nil
     u
-  }.uniq.reject { |l|
-    @visited_urls.include?(l)
+  }.compact.uniq.reject { |l|
+    @visited_urls.include?(l) || l !~ /buzzfeed.com/ || l =~ /.png/ ||
+      l =~ /.gif/ || l =~ /.jpg/ || l =~ /.jpeg/      
+      
   }
 
   @data << text
@@ -160,14 +175,15 @@ puts @data.count
 @output = ""
 output_count = 0
 
-while output_count < 1000
+
+while output_count < OUTPUT_COUNT
   index1 = rand(0...@data.length)
   index2 = rand(0...@data[index1].length)
 
-  puts @data[index1][index2].inspect
+  #puts @data[index1][index2].inspect
   
   chunk = @data.sample.sample.shift
-  puts chunk
+#  puts chunk
   next if chunk.nil?
 
   @output << chunk
@@ -175,6 +191,10 @@ while output_count < 1000
   output_count = @output.split.size
 end
 
-puts "=================================="
 
+puts "=================================="
+puts @visited_urls.inspect
 puts @output
+
+File.write("output.txt", @output)
+File.write("urls.json", JSON.generate(@visited_urls))
